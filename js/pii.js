@@ -453,6 +453,37 @@ export function obfuscatePDFText(pdfText) {
     return randomDigits(match.length);
   });
 
+  // Known-name line removal (runs last — operates on whole lines, so it doesn't
+  // disturb the offset-based protected-line logic above). The app already knows the
+  // user's own name, so redact any line containing any word of their name/surname.
+  // Keys off the name itself, not a label, so it's language-agnostic and catches
+  // headers/signatures the label rules miss. A patient-name line carries no lab data,
+  // so the whole line is replaced. Tokens <3 chars and common name particles are
+  // skipped to avoid clobbering unrelated lab text.
+  const NAME_PARTICLES = new Set(['del', 'las', 'los', 'von', 'van', 'der', 'den', 'mac']);
+  let profileName = '';
+  try {
+    const p = (state.profiles || []).find(pr => pr.id === state.currentProfile);
+    profileName = (p?.name || '').trim();
+  } catch { /* no profile name available */ }
+  if (profileName) {
+    const nameTokens = profileName
+      .split(/[\s,]+/)
+      .map(t => t.trim())
+      .filter(t => t.length >= 3 && !NAME_PARTICLES.has(t.toLowerCase()));
+    if (nameTokens.length) {
+      const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Word-boundary match (Unicode-aware) so e.g. "Andres" won't fire inside other words.
+      const nameRe = new RegExp(
+        '(^|[^\\p{L}\\p{N}])(' + nameTokens.map(esc).join('|') + ')([^\\p{L}\\p{N}]|$)', 'iu'
+      );
+      text = text.split('\n').map(line => {
+        if (nameRe.test(line)) { replacements++; return '[redacted]'; }
+        return line;
+      }).join('\n');
+    }
+  }
+
   return { obfuscated: text, original, replacements };
 }
 
