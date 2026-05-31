@@ -198,6 +198,11 @@ function isAIStreamAbortError(err) {
   return message.includes('bodystreambuffer was aborted')
     || message.includes('aborted by user')
     || (message.includes('body') && message.includes('stream') && message.includes('abort'))
+    // Stream-stall guard (readWithStallTimeout) — fires when time-to-first-token
+    // exceeds STREAM_STALL_TIMEOUT_MS (30s), common for slow/thinking models on the
+    // large PDF-parse prompt. Treat as retryable so the import falls back to a
+    // non-streaming request with the full AI_IMPORT_REQUEST_TIMEOUT_MS (180s) budget.
+    || (message.includes('stalled') && message.includes('no data'))
     || name === 'aborterror';
 }
 
