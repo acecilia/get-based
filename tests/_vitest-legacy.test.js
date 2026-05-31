@@ -116,6 +116,7 @@ const LEGACY_TESTS = [
   // Batch 14 — demo + integration source inspection.
   './test-demo.js',
   './test-integration-batch2.js',
+  './test-csv-export.js',
   // Batch 15 — v1.6 regression coverage.
   './test-v1-6-shipped.js',
   // Batch 16 — sync + small dashboard tests.

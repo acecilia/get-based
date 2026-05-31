@@ -211,3 +211,16 @@ export function isLabEntryEmpty(entry) {
 export function isLabEntryRemovable(entry) {
   return isLabEntryEmpty(entry) && !hasLabEntryMarkerTombstones(entry);
 }
+
+export function getLabEntrySourceFiles(entry) {
+  if (!entry || typeof entry !== 'object') return [];
+  const files = [];
+  const add = (f) => { if (f && !files.includes(f)) files.push(f); };
+  const sources = entry.markerSources;
+  if (sources && typeof sources === 'object') {
+    for (const k of Object.keys(sources)) add(sources[k] && sources[k].file);
+  }
+  if (Array.isArray(entry.sourceFiles)) entry.sourceFiles.forEach(add);
+  add(entry.sourceFile);
+  return files;
+}

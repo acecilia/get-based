@@ -14,6 +14,7 @@ import { renderWearablesSettingsSection } from './wearables-settings-panel.js';
 import { loadPdfImport } from './import-loader.js';
 import { isProductRecsEnabled, setProductRecsEnabled } from './recommendations.js';
 import { closeModalOverlay, openModalOverlay, removeModalOverlay } from './modal-lifecycle.js';
+import { getLabEntrySourceFiles } from './lab-entry.js';
 
 /** @typedef {Window & typeof globalThis & Record<string, any>} SettingsWindow */
 
@@ -475,6 +476,9 @@ function handleSettingsClick(event) {
   } else if (action === 'export-client') {
     event.preventDefault();
     settingsWindow.exportClientJSON?.(settingsWindow.getActiveProfileId?.());
+  } else if (action === 'export-biomarkers-csv') {
+    event.preventDefault();
+    settingsWindow.exportBiomarkersCSV?.();
   } else if (action === 'share-profile') {
     event.preventDefault();
     closeSettingsModal();
@@ -1330,7 +1334,7 @@ export function renderDataEntriesSection() {
     const entryMarkerKeys = Object.keys(entry.markers);
     const manualCount = entryMarkerKeys.filter(k => manualValues[k + ':' + entry.date]).length;
     const isFullyManual = !entry.importedWith && manualCount === cnt;
-    const files = entry.sourceFiles || (entry.sourceFile ? [entry.sourceFile] : []);
+    const files = getLabEntrySourceFiles(entry);
     const fileLabel = files.length > 0
       ? `<span style="color:var(--text-muted);margin-left:8px;font-size:11px;border-bottom:1px dashed var(--text-muted);cursor:help" title="${escapeAttr(files.join('\n'))}">${files.length === 1 ? escapeHTML(files[0].length > 30 ? files[0].slice(0, 27) + '...' : files[0]) : files.length + ' files'}</span>`
       : '';
@@ -1354,6 +1358,7 @@ export function renderDataEntriesSection() {
     <button class="import-btn import-btn-primary" data-settings-action="share-profile">Share Profile</button>
     <button class="import-btn import-btn-secondary" data-settings-action="export-client">Export Client</button>
     <button class="import-btn import-btn-secondary" data-settings-action="export-all-clients" title="Full backup — all profiles, data, and chat history">Export All Clients</button>
+    <button class="import-btn import-btn-secondary" data-settings-action="export-biomarkers-csv" title="This client's biomarkers as a CSV spreadsheet — markers in rows, one column per collection date">Export Client Biomarkers (CSV)</button>
     <button class="import-btn import-btn-secondary" style="color:var(--red);border-color:var(--red)" data-settings-action="clear-all-data">Clear All Data</button></div>`;
   return html;
 }
