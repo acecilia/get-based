@@ -6,6 +6,7 @@ import { bindDetailModalSyncRefresh, escapeHTML, escapeAttr, getStatus, formatVa
 import { getActiveData, saveImportedData, updateHeaderDates } from './data.js';
 import { getEffectiveRange, getEffectiveRangeForDate } from './marker-analysis.js';
 import { createLineChart, getMarkerDescription } from './charts.js';
+import { resolveCategory } from './category-resolver.js';
 import { closeSuggestionsOnClickOutside } from './context-cards.js';
 import { callClaudeAPI, hasAIProvider, getAIProvider, getActiveModelId } from './api.js';
 import { deleteEmptyLabEntries, deleteLabEntryMarkerValues } from './lab-entry-mutations.js';
@@ -204,7 +205,7 @@ export function showDetailModal(id, opts = {}) {
   const data = getActiveData();
   const idx = id.indexOf('_');
   const catKey = id.slice(0, idx), mKey = id.slice(idx + 1);
-  let marker = data.categories[catKey]?.markers[mKey];
+  let marker = resolveCategory(catKey, data)?.markers[mKey];
   if (marker) state.markerRegistry[id] = marker;
   if (!marker) return;
   // Remember which marker is open so toggleAltUnits can re-render in place.
@@ -381,7 +382,7 @@ export function showDetailModal(id, opts = {}) {
   const quickMarkerPinTitle = quickMarkerPinned ? 'Remove from Quick Markers' : 'Pin to Quick Markers';
   let html = `<div class="gb-detail-head">
       <div>
-        <div class="gb-detail-kicker">${escapeHTML(data.categories[catKey]?.label || catKey)}</div>
+        <div class="gb-detail-kicker">${escapeHTML(resolveCategory(catKey, data)?.label || catKey)}</div>
         <h3>${escapeHTML(marker.name)}${renameLink}</h3>
         <div class="modal-unit">${escapeHTML(marker.unit)}</div>
         ${altUnitInfo}
@@ -734,7 +735,7 @@ export function openManualEntryForm(id, prefillDate) {
   if (idx < 0) return;
   const catKey = id.slice(0, idx), mKey = id.slice(idx + 1);
   const data = getActiveData();
-  const marker = data.categories[catKey]?.markers[mKey];
+  const marker = resolveCategory(catKey, data)?.markers[mKey];
   if (marker) state.markerRegistry[id] = marker;
   if (!marker) return;
   const modal = setDetailModalShell('gb-form-modal', 'marker-form-modal');
@@ -779,7 +780,7 @@ export function openManualEntryForm(id, prefillDate) {
     : `<span style="color:var(--text-muted);font-weight:400">(${escapeHTML(marker.unit)})</span>`;
   modal.innerHTML = `<div class="gb-modal-head">
       <div>
-        <div class="gb-modal-kicker">${escapeHTML(data.categories[catKey]?.label || catKey)}</div>
+        <div class="gb-modal-kicker">${escapeHTML(resolveCategory(catKey, data)?.label || catKey)}</div>
         <div class="gb-modal-title">Add Value Manually</div>
       </div>
       <button class="modal-close" aria-label="Close" onclick="closeModal()">&times;</button>

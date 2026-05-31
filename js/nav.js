@@ -192,11 +192,35 @@ export function buildSidebar(data) {
     }
   }
 
-  // Lab category shortcuts stay in the sidebar because they are the fastest
-  // way to jump into a biomarker table, but the Labs lens itself is the
-  // all-biomarker entry point.
-  html += `<div class="nav-section sidebar-title">Lab categories <button class="sidebar-add-marker" onclick="event.stopPropagation();openCreateMarkerModal()" title="Create custom biomarker">+</button></div>`;
-  for (const item of bloodWork) html += item.html;
+  // "Biomarkers" is a top-level section header (same nav-section typography as
+  // "Manage") and hosts the create-custom-biomarker "+". Standard lab categories
+  // and every specialty panel render below it as peer collapsible groups, so the
+  // whole biomarker area shares one disclosure pattern / sidebar-group-header look.
+  html += `<div class="nav-section sidebar-title">Biomarkers <button class="sidebar-add-marker" onclick="event.stopPropagation();openCreateMarkerModal()" title="Create custom biomarker">+</button></div>`;
+
+  // Entry point to the flat all-markers view (virtual category → showCategory).
+  html += `<div class="nav-item" data-category="allbiomarkers" tabindex="0" role="button" onclick="window.navigate('allbiomarkers')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.navigate('allbiomarkers')}">
+    <span class="nav-item-icon" aria-hidden="true">☰</span>
+    <span class="nav-item-label">All biomarkers</span></div>`;
+
+  // Standard (ungrouped) categories are now their own collapsible group, peer to
+  // the specialty groups below. No AI toggle: not a named AI-context group.
+  if (bloodWork.length) {
+    const bwName = 'Lab categories';
+    const bwFlagged = bloodWork.reduce((n, it) => n + it.flagged, 0);
+    const bwCollapsed = _getGroupCollapsed(bwName);
+    const bwFlagHtml = bwFlagged > 0 ? `<span class="flag-count">${bwFlagged}</span>` : '';
+    html += `<div class="sidebar-group-header${bwCollapsed ? ' collapsed' : ''}" data-group-name="${escapeAttr(bwName)}" onclick="toggleNavGroup('${escapeAttr(bwName)}')">
+      <button class="sidebar-group-toggle" onclick="event.stopPropagation();toggleNavGroup('${escapeAttr(bwName)}')" aria-expanded="${!bwCollapsed}" aria-label="${escapeAttr(bwName)} group">
+        <span class="sidebar-group-label">${escapeHTML(bwName)}</span>
+        ${bwFlagHtml}
+      </button>
+      <span class="sidebar-group-arrow" aria-hidden="true">▸</span>
+    </div>`;
+    html += `<div class="sidebar-group-items" data-group-items="${escapeHTML(bwName)}"${bwCollapsed ? ' style="display:none"' : ''}>`;
+    for (const item of bloodWork) html += item.html;
+    html += `</div>`;
+  }
 
   // Render specialty groups
   for (const [groupName, group] of Object.entries(specialtyGroups)) {
@@ -281,7 +305,7 @@ export function filterSidebar() {
   // When searching: show matching items, expand groups with matches, hide empty groups
   items.forEach(el => {
     const cat = el.dataset.category;
-    if (cat === 'dashboard' || cat === 'labs' || cat === 'correlations' || cat === 'compare' || cat === 'recommendations' || cat === 'knowledge' || cat === 'custom-markers' || cat === 'light' || cat === 'body' || cat === 'wearables' || cat === 'emf' || cat === 'light-env-assessment' || cat === 'genome' || cat === 'genetics' || cat === 'insight') { el.style.display = ''; return; }
+    if (cat === 'dashboard' || cat === 'labs' || cat === 'allbiomarkers' || cat === 'correlations' || cat === 'compare' || cat === 'recommendations' || cat === 'knowledge' || cat === 'custom-markers' || cat === 'light' || cat === 'body' || cat === 'wearables' || cat === 'emf' || cat === 'light-env-assessment' || cat === 'genome' || cat === 'genetics' || cat === 'insight') { el.style.display = ''; return; }
     const label = el.textContent.toLowerCase();
     const markers = (el.dataset.markers || '').toLowerCase();
     el.style.display = (label.includes(query) || markers.includes(query)) ? '' : 'none';
