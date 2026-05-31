@@ -220,7 +220,6 @@ body.analytics-consent-visible .version-update-banner { bottom: 78px; }
 }
 .sidebar-title {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 0 8px;
 }
 .nav-item {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;

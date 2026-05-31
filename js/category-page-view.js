@@ -12,6 +12,7 @@ import {
 } from './data.js';
 import { getEffectiveRangeForDate, getLatestValueIndex } from './marker-analysis.js';
 import { createLineChart } from './charts.js';
+import { resolveCategory, isVirtualCategory } from './category-resolver.js';
 import { loadChartCardRecs } from './chart-card-recs.js';
 import { renderCategoryGlyph } from './category-glyphs.js';
 import {
@@ -114,6 +115,38 @@ function sortCategoryChartEntries(entries, categoryKey) {
   });
 }
 
+// Charts-view body: status-sorted chart cards plus a "No data yet" strip for
+// markers without values. Shared by the initial render (showCategory) and the
+// view-toggle re-render (switchView) so the two paths can't drift — both the
+// status sort and the no-data strip are emitted here, once.
+function renderCategoryChartsHtml(cat, categoryKey, data) {
+  const allEntries = Object.entries(cat.markers).filter(([, m]) => !m.hidden);
+  const withData = allEntries.filter(([, m]) => markerHasData(m));
+  sortCategoryChartEntries(withData, categoryKey);
+  let html = `<div class="charts-grid">`;
+  for (const [key, marker] of withData) {
+    // Skip legacy customMarkers with unsafe keys — they can't be safely
+    // embedded in inline-onclick handlers.
+    if (!safeMarkerId(key)) continue;
+    html += renderChartCard(categoryKey + "_" + key, marker, data.dateLabels);
+  }
+  html += `</div>`;
+  // Show empty markers (no data yet) as clickable cards
+  const noData = allEntries.filter(([, m]) => !markerHasData(m));
+  if (noData.length > 0) {
+    html += `<div style="margin-top:16px"><p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">No data yet</p><div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    for (const [key, marker] of noData) {
+      if (!safeMarkerId(key)) continue;
+      const id = categoryKey + '_' + key;
+      html += `<div class="chart-card" role="button" tabindex="0" aria-label="Add value for ${escapeHTML(marker.name)}" ${markerDetailActionAttrs('show-detail-modal', { id })} style="cursor:pointer;padding:12px 16px;min-height:auto;flex:0 0 auto">
+          <span style="color:var(--text-secondary)">${escapeHTML(marker.name)}</span>
+          <span style="color:var(--text-muted);font-size:11px;margin-left:6px">+ add value</span></div>`;
+    }
+    html += `</div></div>`;
+  }
+  return html;
+}
+
 export function showCategory(categoryKey, preData) {
   // categoryKey is interpolated into delegated data attributes below. Reject
   // anything that doesn't match the strict allowlist so a poisoned
@@ -123,12 +156,14 @@ export function showCategory(categoryKey, preData) {
   if (window.loadCatalog && !window._cachedCatalog) window.loadCatalog().then(c => { window._cachedCatalog = c; });
   const rawData = preData || getActiveData();
   const data = filterDatesByRange(rawData);
-  const cat = data.categories[categoryKey];
+  const cat = resolveCategory(categoryKey, data);
+  if (!cat) return;
   const main = document.getElementById("main-content");
   const allEntries = Object.entries(cat.markers).filter(([, m]) => !m.hidden);
   const withData = allEntries.filter(([, m]) => markerHasData(m));
   const countLabel = withData.length < allEntries.length ? `${withData.length} of ${allEntries.length} biomarkers with data` : `${allEntries.length} biomarkers tracked`;
-  const renameBtn = ` <span class="ref-edited-badge" role="button" tabindex="0" aria-label="Rename category" title="Rename category" ${categoryPageActionAttrs('rename-category', { category: categoryKey })} style="cursor:pointer;font-size:12px">rename</span>`;
+  // Virtual categories (e.g. All Biomarkers) have no underlying category object to rename.
+  const renameBtn = isVirtualCategory(categoryKey) ? '' : ` <span class="ref-edited-badge" role="button" tabindex="0" aria-label="Rename category" title="Rename category" ${categoryPageActionAttrs('rename-category', { category: categoryKey })} style="cursor:pointer;font-size:12px">rename</span>`;
   let html = `<div class="category-header"><h2>${renderCategoryGlyph(categoryKey, cat.label)}<span class="category-title-text">${escapeHTML(cat.label)}</span>${renameBtn}</h2>
     <p>${countLabel}</p></div>`;
 
@@ -148,28 +183,7 @@ export function showCategory(categoryKey, preData) {
   } else if (cat.singleDate) {
     html += renderFattyAcidsView(cat, categoryKey);
   } else {
-    sortCategoryChartEntries(withData, categoryKey);
-    html += `<div class="charts-grid">`;
-    for (const [key, marker] of withData) {
-      // Skip legacy customMarkers with unsafe keys — they can't be safely
-      // embedded in inline-onclick handlers.
-      if (!safeMarkerId(key)) continue;
-      html += renderChartCard(categoryKey + "_" + key, marker, data.dateLabels);
-    }
-    html += `</div>`;
-    // Show empty markers (no data yet) as clickable cards
-    const noData = allEntries.filter(([, m]) => !markerHasData(m));
-    if (noData.length > 0) {
-      html += `<div style="margin-top:16px"><p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">No data yet</p><div style="display:flex;flex-wrap:wrap;gap:8px">`;
-      for (const [key, marker] of noData) {
-        if (!safeMarkerId(key)) continue;
-        const id = categoryKey + '_' + key;
-        html += `<div class="chart-card" role="button" tabindex="0" aria-label="Add value for ${escapeHTML(marker.name)}" ${markerDetailActionAttrs('show-detail-modal', { id })} style="cursor:pointer;padding:12px 16px;min-height:auto;flex:0 0 auto">
-          <span style="color:var(--text-secondary)">${escapeHTML(marker.name)}</span>
-          <span style="color:var(--text-muted);font-size:11px;margin-left:6px">+ add value</span></div>`;
-      }
-      html += `</div></div>`;
-    }
+    html += renderCategoryChartsHtml(cat, categoryKey, data);
   }
   html += `</div>`;
   main.innerHTML = html;
@@ -208,7 +222,8 @@ export function switchView(view, categoryKey, btn) {
   destroyAllCharts();
   const rawData = getActiveData();
   const data = filterDatesByRange(rawData);
-  const cat = data.categories[categoryKey];
+  const cat = resolveCategory(categoryKey, data);
+  if (!cat) return;
   const container = document.getElementById("view-content");
   // Pre-sanitize date labels at the call boundary — CodeQL's taint analysis
   // (js/xss-through-dom) doesn't trace sanitizers across function calls, so
@@ -226,15 +241,12 @@ export function switchView(view, categoryKey, btn) {
       container.innerHTML = renderFattyAcidsView(cat, categoryKey);
       renderFattyAcidsCharts(cat);
     } else {
+      // Same charts body as the initial render (status sort + "No data yet"
+      // strip) via the shared helper, so the toggle re-render can't drift.
+      container.innerHTML = renderCategoryChartsHtml(cat, categoryKey, data);
       // Per-key safety check skips legacy customMarkers with unsafe keys so
-      // they never reach inline-onclick handlers in renderChartCard.
+      // they never reach inline-onclick handlers in createLineChart.
       const withData = Object.entries(cat.markers).filter(([key, m]) => markerHasData(m) && safeMarkerId(key));
-      let html = `<div class="charts-grid">`;
-      for (const [key, marker] of withData) {
-        html += renderChartCard(categoryKey + "_" + key, marker, data.dateLabels);
-      }
-      html += `</div>`;
-      container.innerHTML = html;
       for (const [key, marker] of withData) {
         createLineChart(categoryKey + "_" + key, marker, data.dateLabels, data.dates, data.phaseLabels);
       }

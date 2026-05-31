@@ -16,6 +16,9 @@ export const CORE_ROUTES = new Set([
   'correlations',
   'compare',
   'light',
+  // Virtual category — resolved by category-resolver, rendered by the category
+  // handler (showCategory). Listed here so isKnownRoute accepts it.
+  'allbiomarkers',
 ]);
 
 function _lastViewStorageKey() {
