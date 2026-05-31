@@ -998,8 +998,14 @@ export async function handlePDFFile(file, forceImageMode = false, preExtractedTe
 // BATCH PDF IMPORT
 // ═══════════════════════════════════════════════
 let _batchMode = false;
+let _batchAutoApprove = false;
 
 async function _processBatchFile(file, ollama, fileNum, totalFiles) {
+  // Capture the active profile up front so confirmImport's wrong-profile guard
+  // (result._importProfileId !== state.currentProfile) can detect a profile switch
+  // during the multi-second parse — including the auto-approve path, which bypasses
+  // showImportPreview where this would otherwise be backfilled.
+  const _startProfileId = state.currentProfile;
   await showBatchImportProgress(0, file.name, fileNum, totalFiles);
   const pdfText = await extractPDFText(file);
   if (!pdfText.trim()) { showNotification(`${file.name}: PDF appears empty`, 'error'); return 'empty'; }
@@ -1082,11 +1088,51 @@ async function _processBatchFile(file, ollama, fileNum, totalFiles) {
   };
   trackUsage(prov, mid, tokens.inputTokens, tokens.outputTokens);
   result.importHash = hashString(pdfText);
+  result._importProfileId = _startProfileId;
   if (isDebugMode()) { result.privacyOriginal = privacyOriginal; result.privacyObfuscated = textForAI; }
   if (result.markers.length === 0) { showNotification(`${file.name}: No markers found`, 'error'); return 'no-markers'; }
   await showBatchImportProgress(4, file.name, fileNum, totalFiles);
+  // Auto-approve mode: import matched + new markers without showing the review modal.
+  // Requires a collection date (confirmImport silently no-ops without one), so a
+  // dateless report falls through to the interactive modal where the date can be set.
+  if (_batchAutoApprove && result.date) {
+    const eligible = result.markers.filter(m => m.matched || m.suggestedKey).length;
+    if (eligible === 0) { showNotification(`${file.name}: no mappable markers — skipped`, 'info'); return 'no-markers'; }
+    window._pendingImport = result;
+    await confirmImport();
+    return 'imported';
+  }
   const action = await showImportPreviewAsync(result, fileNum, totalFiles);
   return action === 'skip' ? 'skipped' : 'imported';
+}
+
+/** Batch import mode picker — review each report, or auto-approve all without review. */
+function showBatchImportModeDialog(total) {
+  return new Promise(resolve => {
+    let overlay = document.getElementById('confirm-dialog-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'confirm-dialog-overlay';
+      overlay.className = 'confirm-overlay';
+      document.body.appendChild(overlay);
+    }
+    overlay.innerHTML = `<div class="confirm-dialog" role="alertdialog" aria-modal="true" style="max-width:460px">
+      <p class="confirm-message" style="margin-bottom:8px"><strong>${total} reports queued.</strong> How do you want to import them?</p>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;line-height:1.5">
+        <strong>Review each</strong> opens the mapping screen per report so you can check and edit before saving.<br>
+        <strong>Auto-approve all</strong> imports every report's matched and new markers automatically, with no review screen. A report with no detectable collection date still opens for review so you can set it.
+      </div>
+      <div class="confirm-actions">
+        <button class="confirm-btn confirm-btn-cancel" id="batch-review-each">Review each</button>
+        <button class="confirm-btn" id="batch-auto-approve" style="background:var(--accent);color:#fff">Auto-approve all</button>
+      </div></div>`;
+    overlay.classList.add('show');
+    const done = (val) => { overlay.classList.remove('show'); resolve(val); };
+    document.getElementById('batch-auto-approve').onclick = () => done(true);
+    document.getElementById('batch-review-each').onclick = () => done(false);
+    overlay.onclick = (e) => { if (e.target === overlay) { const d = overlay.querySelector('.confirm-dialog'); if (d) { d.classList.add('modal-nudge'); d.addEventListener('animationend', () => d.classList.remove('modal-nudge'), { once: true }); } } };
+    document.getElementById('batch-review-each').focus();
+  });
 }
 
 export async function handleBatchPDFs(pdfFiles) {
@@ -1095,6 +1141,7 @@ export async function handleBatchPDFs(pdfFiles) {
     return;
   }
   _batchMode = true;
+  _batchAutoApprove = pdfFiles.length > 1 ? await showBatchImportModeDialog(pdfFiles.length) : false;
   const ollama = await checkOllamaPII();
   let imported = 0, skipped = 0, failed = 0;
   const failedFiles = [];
@@ -1132,6 +1179,7 @@ export async function handleBatchPDFs(pdfFiles) {
     }
   }
   _batchMode = false;
+  _batchAutoApprove = false;
   // Refresh UI once after all files processed
   refreshImportedDataViews();
   hideImportProgress();
