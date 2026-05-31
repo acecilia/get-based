@@ -325,11 +325,7 @@ export function downloadSummary() {
   const dateLine = _activeSummary.date ? `_Summarized ${new Date(_activeSummary.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}${_activeSummary.model ? ' \u00b7 ' + _activeSummary.model : ''}_` : '';
   const header = `# ${name}\n\n${dateLine}\n\n---\n\n`;
   const blob = new Blob([header + _activeSummary.content], { type: 'text/markdown' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  downloadBlob(blob, filename);
 }
 
 export function printSummary() {

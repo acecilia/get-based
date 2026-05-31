@@ -82,6 +82,7 @@ const TEST_FILES = [
   // Knowledge Base modal rendering) live in test-custom-lens-dom.js below.
   'tests/test-custom-lens-dom.js',
   'tests/test-export-import.js',
+  'tests/test-csv-export.js',
   'tests/test-ui-flows.js',
   'tests/test-lens-local-worker.js',
   // test-ai-verdict-engine.js stays on the puppeteer runner — the engine has

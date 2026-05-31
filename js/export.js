@@ -1,7 +1,7 @@
 // export.js — PDF report, JSON export/import, clear all data
 
 import { state } from './state.js';
-import { getStatus, formatValue, showNotification, showConfirmDialog, getTrend } from './utils.js';
+import { getStatus, formatValue, showNotification, showConfirmDialog, getTrend, downloadBlob } from './utils.js';
 import { getActiveData, filterDatesByRange, saveImportedData } from './data.js';
 import { getAllFlaggedMarkers, getEffectiveRange, getLatestValueIndex } from './marker-analysis.js';
 import { getProfiles, profileStorageKey, createProfile, updateProfileMeta, loadProfile, saveProfiles, migrateProfileData } from './profile.js';
@@ -15,7 +15,7 @@ import {
   trimImportedArray,
 } from './data-merge.js';
 import { findOrCreateLabEntry } from './lab-entry-mutations.js';
-import { setLabEntryMarker } from './lab-entry.js';
+import { setLabEntryMarker, getLabEntrySourceFiles } from './lab-entry.js';
 
 // ═══════════════════════════════════════════════
 // PDF REPORT EXPORT
@@ -472,15 +472,8 @@ export async function exportClientJSON(profileId, includeChat = false) {
     if (chat) exportObj.chat = chat;
   }
   const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
   const safeName = profile.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  a.download = `getbased-${safeName}-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `getbased-${safeName}-${new Date().toISOString().slice(0, 10)}.json`);
   showNotification(`Exported "${profile.name}"`, 'success');
 }
 
@@ -517,14 +510,7 @@ export async function exportAllDataJSON() {
   if (!json) { showNotification('No profiles to export', 'error'); return; }
   const bundle = JSON.parse(json);
   const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `getbased-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `getbased-backup-${new Date().toISOString().slice(0, 10)}.json`);
   showNotification(`Exported ${bundle.profiles.length} client${bundle.profiles.length !== 1 ? 's' : ''}`, 'success');
 }
 
@@ -1276,4 +1262,101 @@ export async function loadDemoData(sex = 'male') {
   }
 }
 
-Object.assign(window, { exportPDFReport, exportDataJSON, exportClientJSON, exportAllDataJSON, buildAllDataBundle, importDataJSON, clearAllData, loadDemoData });
+// ═══════════════════════════════════════════════
+// CSV BIOMARKER EXPORT (wide matrix — markers × test dates)
+// ═══════════════════════════════════════════════
+
+// RFC-4180 field quoting (symmetric with parseCsvLine in dna.js) plus CSV
+// formula-injection defense: a cell whose first char is = + - @ TAB CR is
+// prefixed with a tab so spreadsheets treat it as text, not an executable
+// formula. Real negative numbers (e.g. "-1.2") are exempt so T/Z-scores stay
+// numeric. Marker names, notes, and filenames are user-controlled, so they can
+// carry a leading "=HYPERLINK(...)" etc.
+function csvEscape(field) {
+  let s = field == null ? '' : String(field);
+  if (/^[=+\-@\t\r]/.test(s) && !/^-?\d/.test(s)) s = '\t' + s;
+  return /[",\n\r\t]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function _sourceFileForDate(entries, date) {
+  const files = [];
+  for (const e of entries) {
+    if (e?.date !== date) continue;
+    for (const f of getLabEntrySourceFiles(e)) if (!files.includes(f)) files.push(f);
+  }
+  return files.join('; ');
+}
+
+// Wide-matrix biomarker CSV: marker per row, collection date per column, with a
+// Source-file row above the date header. Reads getActiveData() (values, ranges,
+// labels and units already resolved); calculated markers excluded. Range bounds
+// are kept as separate numeric columns rather than a "4-5" string — spreadsheets
+// coerce hyphen-joined ranges into dates.
+export function buildBiomarkersCSV(data) {
+  data = data || getActiveData();
+  const markerNotes = (state.importedData && state.importedData.markerNotes) || {};
+  const entries = (state.importedData && state.importedData.entries) || [];
+  const num = (v) => (v == null ? '' : v);
+
+  // Column axis = the multi-point dates plus any singlePoint category's lone
+  // measurement date — singlePoint markers (DEXA etc.) carry one value at
+  // cat.singleDate, which getActiveData keeps off the main data.dates axis.
+  const dateSet = new Set(data.dates || []);
+  for (const cat of Object.values(data.categories || {})) {
+    if (cat.singlePoint && cat.singleDate) dateSet.add(cat.singleDate);
+  }
+  const dates = [...dateSet].sort();
+
+  const LEAD = ['Category', 'Marker', 'Unit', 'Reference Min', 'Reference Max', 'Optimal Min', 'Optimal Max', 'Note'];
+  const fileByDate = dates.map(d => _sourceFileForDate(entries, d));
+
+  const rows = [
+    ['Source file', ...Array(LEAD.length - 1).fill(''), ...fileByDate],
+    [...LEAD, ...dates],
+  ];
+
+  for (const [catKey, cat] of Object.entries(data.categories || {})) {
+    if (cat.calculated) continue;
+    for (const [mKey, marker] of Object.entries(cat.markers || {})) {
+      if (marker.calculated || marker.hidden) continue;
+      const values = marker.values || [];
+      if (!values.some(v => v != null)) continue;
+      // Map values onto the column axis: singlePoint markers hold one value at
+      // cat.singleDate; multi-point markers align to data.dates by index.
+      const valueByDate = {};
+      if (cat.singlePoint) {
+        if (cat.singleDate != null) valueByDate[cat.singleDate] = values[0];
+      } else {
+        (data.dates || []).forEach((d, i) => { valueByDate[d] = values[i]; });
+      }
+      rows.push([
+        cat.label || catKey,
+        marker.name || mKey,
+        marker.unit || '',
+        num(marker.refMin),
+        num(marker.refMax),
+        num(marker.optimalMin),
+        num(marker.optimalMax),
+        markerNotes[`${catKey}.${mKey}`] || '',
+        ...dates.map(d => num(valueByDate[d])),
+      ]);
+    }
+  }
+
+  return rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+}
+
+export function exportBiomarkersCSV() {
+  const csv = buildBiomarkersCSV(getActiveData());
+  // Source-file row + header only → nothing to export.
+  if (csv.split('\r\n').length <= 2) { showNotification('No biomarker data to export', 'error'); return; }
+  const profiles = getProfiles();
+  const profileName = (profiles.find(p => p.id === state.currentProfile) || { name: 'Profile' }).name;
+  // Leading UTF-8 BOM so spreadsheets render µ / emoji correctly.
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const safeName = profileName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  downloadBlob(blob, `getbased-biomarkers-${safeName}-${new Date().toISOString().slice(0, 10)}.csv`);
+  showNotification(`Exported biomarkers for "${profileName}"`, 'success');
+}
+
+Object.assign(window, { exportPDFReport, exportDataJSON, exportClientJSON, exportAllDataJSON, buildAllDataBundle, buildBiomarkersCSV, exportBiomarkersCSV, importDataJSON, clearAllData, loadDemoData });

@@ -211,6 +211,20 @@ export function bindDetailModalSyncRefresh(kind, refresh) {
   });
 }
 
+// Trigger a browser download of a Blob under the given filename. Shared by the
+// JSON/CSV/backup/summary exporters (the Blob → object-URL → anchor → click →
+// revoke dance is identical everywhere).
+export function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function getStatus(value, refMin, refMax) {
   if (value === null || value === undefined) return "missing";
   if (refMin == null && refMax == null) return "normal";

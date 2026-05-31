@@ -24,3 +24,4 @@ test-screenshots/
 .mcp.json
 .env.local
 .env.*.local
+.DS_Store

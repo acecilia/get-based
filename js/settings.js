@@ -10,6 +10,7 @@ import { renderEncryptionSection, renderBackupSection, loadBackupSnapshots } fro
 import { renderSyncSection, renderMessengerSection, hydrateSettingsSyncPanel } from './settings-sync-panel.js';
 import { renderWearablesSettingsSection } from './wearables-settings-panel.js';
 import { loadPdfImport } from './import-loader.js';
+import { getLabEntrySourceFiles } from './lab-entry.js';
 
 let _providerPanelsLoad = null;
 
@@ -986,7 +987,7 @@ export function renderDataEntriesSection() {
     const entryMarkerKeys = Object.keys(entry.markers);
     const manualCount = entryMarkerKeys.filter(k => manualValues[k + ':' + entry.date]).length;
     const isFullyManual = !entry.importedWith && manualCount === cnt;
-    const files = entry.sourceFiles || (entry.sourceFile ? [entry.sourceFile] : []);
+    const files = getLabEntrySourceFiles(entry);
     const fileLabel = files.length > 0
       ? `<span style="color:var(--text-muted);margin-left:8px;font-size:11px;border-bottom:1px dashed var(--text-muted);cursor:help" title="${escapeAttr(files.join('\n'))}">${files.length === 1 ? escapeHTML(files[0].length > 30 ? files[0].slice(0, 27) + '...' : files[0]) : files.length + ' files'}</span>`
       : '';
@@ -1010,6 +1011,7 @@ export function renderDataEntriesSection() {
     <button class="import-btn import-btn-secondary" onclick="exportClientJSON(window.getActiveProfileId())">Export Client</button>
     <button class="import-btn import-btn-secondary" onclick="exportAllDataJSON()" title="Full backup — all profiles, data, and chat history">Export All Clients</button>
     <button class="import-btn import-btn-secondary" onclick="exportPDFReport()">Export Report</button>
+    <button class="import-btn import-btn-secondary" onclick="exportBiomarkersCSV()" title="This client's biomarkers as a CSV spreadsheet — markers in rows, one column per collection date">Export Client Biomarkers (CSV)</button>
     <button class="import-btn import-btn-secondary" style="color:var(--red);border-color:var(--red)" onclick="clearAllData()">Clear All Data</button></div>`;
   return html;
 }

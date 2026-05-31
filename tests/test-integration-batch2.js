@@ -257,7 +257,7 @@ console.log('=== Integration Tests — Batch 2 Fixes ===\n');
   assert('confirmImport stores sourceFile', importSrc.includes('entry.sourceFile = result.fileName'));
 
   const settingsSrc = read('/js/settings.js');
-  assert('Settings shows sourceFile', settingsSrc.includes('entry.sourceFile'));
+  assert('Settings shows source files', settingsSrc.includes('getLabEntrySourceFiles(entry)'));
   assert('Settings imports escapeAttr', settingsSrc.includes('escapeAttr'));
 
   // ═══════════════════════════════════════
