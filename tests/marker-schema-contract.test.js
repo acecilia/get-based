@@ -93,9 +93,9 @@ describe('marker schema compatibility contract', () => {
       .digest('hex');
 
     expect(Object.keys(facadeMarkerSchema)).toEqual(EXPECTED_CATEGORIES);
-    expect(dotKeys).toHaveLength(197);
+    expect(dotKeys).toHaveLength(198);
     expect(new Set(dotKeys).size).toBe(dotKeys.length);
-    expect(checksum).toBe('27aab9c150320026d41437872d73c8fe01f166ba5140c29f27fb6b4a28cf41b0');
+    expect(checksum).toBe('eeca28e09098c03e2662748d6c13e672f6bf816e21cf17f925561f5d2de75de2');
   });
 
   it('leaves canonical stored dotKeys intact across existing profile migration', () => {

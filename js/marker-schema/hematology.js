@@ -18,6 +18,7 @@ export const HEMATOLOGY_CATEGORY = {
     pct: { name: "Plateletcrit", unit: "%", refMin: 0.15, refMax: 0.40, desc: "The percentage of blood volume occupied by platelets; analogous to hematocrit but for platelets, reflecting total platelet mass." },
     reticulocytes: { name: "Reticulocytes #", unit: "10^9/l", refMin: 30, refMax: 100, desc: "Absolute count of newly produced red blood cells; shows bone-marrow response to anemia, blood loss, or treatment." },
     reticulocytesPct: { name: "Reticulocytes %", unit: "%", refMin: 0.5, refMax: 2.5, desc: "Proportion of circulating red cells that are newly produced; interpret with anemia severity and the absolute reticulocyte count." },
-    immatureGranulocytes: { name: "Immature Granulocytes #", unit: "10^9/l", refMin: 0, refMax: 0.10, desc: "Early granulocyte forms in peripheral blood; elevations can accompany infection, inflammation, marrow stress, or pregnancy." }
+    immatureGranulocytes: { name: "Immature Granulocytes #", unit: "10^9/l", refMin: 0, refMax: 0.10, desc: "Early granulocyte forms in peripheral blood; elevations can accompany infection, inflammation, marrow stress, or pregnancy." },
+    immatureGranulocytesPct: { name: "Immature Granulocytes %", unit: "%", refMin: 0, refMax: 2, desc: "Proportion of white blood cells that are immature granulocytes; interpret alongside the absolute count to assess left shift and marrow stress." }
   }
 };
