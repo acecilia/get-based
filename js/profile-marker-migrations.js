@@ -659,26 +659,6 @@ function _repairNewlyStandardizedImports(data) {
 }
 
 /**
- * Drop stale custom definitions whose key and unit already exactly match a
- * current built-in. Values need no rewrite because the dot key is canonical.
- * A differing unit remains custom unless an import snapshot proves how to
- * convert it safely.
- *
- * @param {ProfileData} data
- * @returns {void}
- */
-function _adoptExactStandardCustomMarkers(data) {
-  if (!data.customMarkers || typeof data.customMarkers !== 'object') return;
-  for (const [key, definition] of Object.entries(data.customMarkers)) {
-    const [catKey, markerKey] = key.split('.');
-    const standard = MARKER_SCHEMA[catKey]?.markers?.[markerKey];
-    if (!standard) continue;
-    if (normalizeClinicalUnit(definition?.unit) !== normalizeClinicalUnit(standard.unit)) continue;
-    delete data.customMarkers[key];
-  }
-}
-
-/**
  * @param {any} entry
  * @param {any} snap
  * @param {string} oldKey
@@ -776,6 +756,23 @@ function _repairSpadiaFattyAcidKeys(data) {
     _deleteDateScopedProfileMarkerData(data, oldKey);
     _deleteGlobalProfileMarkerData(data, oldKey);
     if (data.customMarkers) delete data.customMarkers[oldKey];
+  }
+}
+
+/** Drop stale customs whose key+unit match a built-in; carry a differing range into refOverrides. */
+function _adoptExactStandardCustomMarkers(data) {
+  if (!data.customMarkers || typeof data.customMarkers !== 'object') return;
+  for (const [key, definition] of Object.entries(data.customMarkers)) {
+    const [catKey, markerKey] = key.split('.');
+    const standard = MARKER_SCHEMA[catKey]?.markers?.[markerKey];
+    if (!standard) continue;
+    if (normalizeClinicalUnit(definition?.unit) !== normalizeClinicalUnit(standard.unit)) continue;
+    const refMin = definition?.refMin != null && Number.isFinite(Number(definition.refMin)) ? Number(definition.refMin) : null;
+    const refMax = definition?.refMax != null && Number.isFinite(Number(definition.refMax)) ? Number(definition.refMax) : null;
+    if (!data.refOverrides?.[key] && ((refMin != null && refMin !== standard.refMin) || (refMax != null && refMax !== standard.refMax))) {
+      data.refOverrides = { ...(data.refOverrides || {}), [key]: { ...(refMin != null ? { refMin } : {}), ...(refMax != null ? { refMax } : {}) } };
+    }
+    delete data.customMarkers[key];
   }
 }
 

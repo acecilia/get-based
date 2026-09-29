@@ -128,4 +128,22 @@ describe('percent-marker sibling mapping', () => {
 
     expect(pct.mappedKey).toBe('customThing.igPct');
   });
+
+  it('keeps an explicit absolute unit on the base count marker despite a percent label', () => {
+    const markers = reconcile([
+      { rawName: 'Immature Granulocytes percent (abs)', value: 0.04, unit: '10^9/l', mappedKey: null, matched: false },
+      { rawName: 'Immature Granulocytes percent', value: 0.04, unit: '10^9/l', mappedKey: null, matched: false },
+    ]);
+
+    expect(markers[0].mappedKey).toBe('hematology.immatureGranulocytes');
+    expect(markers[1].mappedKey).toBe('hematology.immatureGranulocytes');
+  });
+
+  it('applies the absolute-unit precedence to existing sibling aliases too', () => {
+    const [absolute] = reconcile([
+      { rawName: 'Reticulocytes percent (abs)', value: 0.05, unit: '10^9/l', mappedKey: null, matched: false },
+    ]);
+
+    expect(absolute.mappedKey).toBe('hematology.reticulocytes');
+  });
 });

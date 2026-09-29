@@ -160,6 +160,20 @@ function _preferImportPercentSiblingKey(key, marker, refLookup, existingKeys) {
   return _hasImportReferenceKey(siblingKey, refLookup, existingKeys) ? siblingKey : key;
 }
 
+// The inverse of the helper above: a row with an explicit absolute hint (`#`,
+// `abs`, `absolute`, or a `10^9` unit) must not stay on a `<marker>Pct`
+// sibling just because its label also spells out "percent" (the alias table
+// strips the parenthetical, so name resolution can select the percent key).
+// When the base count marker exists, prefer it.
+function _preferImportAbsoluteHintKey(key, marker, refLookup, existingKeys) {
+  if (typeof key !== 'string' || !key || !key.endsWith('Pct')) return key;
+  const rawName = marker?.rawName || marker?.suggestedName || '';
+  const unit = normalizeUnitStr(marker?.unit || '');
+  if (!_hasImportAbsoluteHint(rawName, unit)) return key;
+  const baseKey = key.slice(0, -3);
+  return _hasImportReferenceKey(baseKey, refLookup, existingKeys) ? baseKey : key;
+}
+
 export function _cleanImportedMarkerDisplayName(value) {
   const cleaned = _stripImportLabelUnits(_stripImportSpecimenPrefix(value))
     .trim()
@@ -655,6 +669,7 @@ export function reconcileImportMarkerMappings(markers, options = {}) {
       ? (exactSuggestedKey || exactMappedKey)
       : (aliasKey || existingCustomKey);
     if (testType === 'blood' && resolvedKey && !preferredSuggestedKey) {
+      resolvedKey = _preferImportAbsoluteHintKey(resolvedKey, marker, refLookup, existingKeys);
       resolvedKey = _preferImportPercentSiblingKey(resolvedKey, marker, refLookup, existingKeys);
     }
     if (resolvedKey) {

@@ -151,4 +151,35 @@ describe('stable custom marker identity contract', () => {
     expect(local.customMarkers['localPanel.one'].markerId).toBe('custom:local_one');
     expect(remote.customMarkers['remotePanel.two'].markerId).toBe('custom:remote_two');
   });
+
+  it('preserves a custom reference range when the custom key is adopted as a built-in', () => {
+    const key = 'hematology.immatureGranulocytesPct';
+    const profile = {
+      entries: [{ date: '2026-07-01', markers: { [key]: 0.3 } }],
+      customMarkers: { [key]: { name: 'IG %', unit: '%', refMin: 0.1, refMax: 0.9 } },
+    };
+
+    migrateProfileData(profile);
+
+    expect(profile.customMarkers[key]).toBeUndefined();
+    expect(profile.entries[0].markers[key]).toBe(0.3);
+    expect(profile.refOverrides?.[key]).toEqual({ refMin: 0.1, refMax: 0.9 });
+  });
+
+  it('keeps an existing override and a non-differing custom range during adoption', () => {
+    const key = 'hematology.immatureGranulocytesPct';
+    const withOverride = {
+      customMarkers: { [key]: { name: 'IG %', unit: '%', refMin: 0.1, refMax: 0.9 } },
+      refOverrides: { [key]: { refMin: 0.5, refMax: 3 } },
+    };
+    const sameAsStandard = {
+      customMarkers: { [key]: { name: 'IG %', unit: '%', refMin: 0, refMax: 2 } },
+    };
+
+    migrateProfileData(withOverride);
+    migrateProfileData(sameAsStandard);
+
+    expect(withOverride.refOverrides[key]).toEqual({ refMin: 0.5, refMax: 3 });
+    expect(sameAsStandard.refOverrides?.[key]).toBeUndefined();
+  });
 });

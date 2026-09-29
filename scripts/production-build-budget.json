@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "maximums": {
     "startupJavaScriptFiles": 2,
-    "startupDecodedBytes": 1264000,
+    "startupDecodedBytes": 1265000,
     "outputJavaScriptFiles": 165,
     "outputDecodedBytes": 5385000
   },
@@ -77,6 +77,7 @@
     "persistenceHardeningStartupDecodedBytes": 1261837,
     "persistenceHardeningOutputDecodedBytes": 5378608,
     "persistenceHardeningMeasuredCommit": "3b2aa362ff761e9b6fb0c208ebc3f3d595a92622",
+    "immatureGranulocytesPctStartupDecodedBytes": 1264268,
     "chatReliabilityOutputDecodedBytes": 5382509,
     "chatReliabilityMeasuredBaseCommit": "1ab14cc2e9ae326596a038a3b131362763cf07a6",
     "chatReliabilityReviewOutputDecodedBytes": 5383517
