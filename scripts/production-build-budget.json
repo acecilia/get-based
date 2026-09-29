@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "maximums": {
     "startupJavaScriptFiles": 2,
-    "startupDecodedBytes": 1264000,
-    "outputJavaScriptFiles": 165,
-    "outputDecodedBytes": 5385000
+    "startupDecodedBytes": 1276000,
+    "outputJavaScriptFiles": 167,
+    "outputDecodedBytes": 5435000
   },
   "reference": {
     "startupJavaScriptFiles": 2,
@@ -79,8 +79,32 @@
     "persistenceHardeningMeasuredCommit": "3b2aa362ff761e9b6fb0c208ebc3f3d595a92622",
     "chatReliabilityOutputDecodedBytes": 5382509,
     "chatReliabilityMeasuredBaseCommit": "1ab14cc2e9ae326596a038a3b131362763cf07a6",
-    "chatReliabilityReviewOutputDecodedBytes": 5383517
+    "chatReliabilityReviewOutputDecodedBytes": 5383517,
+    "doseCorrelationsStartupDecodedBytes": 1268080,
+    "doseCorrelationsOutputJavaScriptFiles": 167,
+    "doseCorrelationsOutputDecodedBytes": 5402446,
+    "doseCorrelationsMeasuredBaseCommit": "4887b0b300a248a5b04f6a2309c094e2f240188f",
+    "ingredientDoseReferencesStartupDecodedBytes": 1268943,
+    "ingredientDoseReferencesOutputDecodedBytes": 5408186,
+    "unifiedTherapyPresentationStartupDecodedBytes": 1269686,
+    "unifiedTherapyPresentationOutputDecodedBytes": 5409196,
+    "correlationWorkspaceMeasuredBaseCommit": "6aa9b43e",
+    "correlationChartGuidanceOutputDecodedBytes": 5421666,
+    "correlationChartGuidanceMeasuredBaseCommit": "4fefc1f6",
+    "ingredientRegimenSnapshotsStartupDecodedBytes": 1270179,
+    "ingredientRegimenSnapshotsOutputDecodedBytes": 5423020,
+    "ingredientRegimenSnapshotsMeasuredBaseCommit": "fe9905e3",
+    "correlationPresetsAndInspectionStartupDecodedBytes": 1271273,
+    "correlationPresetsAndInspectionOutputDecodedBytes": 5425938,
+    "correlationPresetsAndInspectionMeasuredBaseCommit": "0d41bb5e",
+    "correlationDoseConfirmationOutputDecodedBytes": 5429533,
+    "correlationDoseConfirmationMeasuredBaseCommit": "043d4f3e",
+    "correlationWorkspacePersistenceStartupDecodedBytes": 1274312,
+    "correlationWorkspacePersistenceOutputDecodedBytes": 5432097,
+    "correlationWorkspacePersistenceMeasuredBaseCommit": "c0a0a478",
+    "correlationsReleaseNotesOutputDecodedBytes": 5434317,
+    "correlationsReleaseNotesMeasuredBaseCommit": "6598bee5"
   },
   "referenceCommit": "331112b1",
-  "measuredAt": "2026-09-22"
+  "measuredAt": "2026-09-28"
 }

@@ -3,7 +3,7 @@
 
 import { state } from './state.js';
 import { bindDetailModalSyncRefresh, escapeHTML, showConfirmDialog, showNotification } from './utils.js';
-import { saveImportedData } from './data.js';
+import { saveImportedData, saveImportedDataForProfile } from './data.js';
 import {
   appendImportedArrayItem,
   deleteImportedArrayItem,
@@ -24,11 +24,14 @@ import {
 import {
   SUPPLEMENT_RECORD_VERSION,
   createSupplementRecordId,
+  confirmIngredientDosePeriod,
   getSupplementPeriods,
   getSupplementRecordId,
   getSupplementStatus,
   localDateKey,
   normalizeSupplementUnit,
+  recordSupplementSchedule,
+  recordIngredientDoseChange,
 } from './supplement-medication-domain.js';
 import {
   aggregateSupplementContaminants,
@@ -37,6 +40,7 @@ import {
   isSupplementQualityIncludedInAI,
 } from './supplement-quality.js';
 import {
+  applyIngredientDoseToPeriod,
   addIngredientRow,
   addPeriodRow,
   addQualityTestRow,
@@ -328,6 +332,7 @@ export function saveSupplement(index) {
   if (scheduleMode !== 'prn' && isFinite(timesPerDay) && timesPerDay > 0) entry.timesPerDay = timesPerDay;
   else delete entry.timesPerDay;
   entry.schedule.timesPerDay = entry.timesPerDay ?? null;
+  entry.periods = recordSupplementSchedule(previous, entry.periods, entry.schedule);
   if (sourceUrl) entry.sourceUrl = sourceUrl.toString(); else delete entry.sourceUrl;
   for (const [field, id] of [['brand','supp-brand'],['genericName','supp-generic-name'],['dosageForm','supp-dosage-form'],['route','supp-route'],['labelDirections','supp-label-directions'],['reason','supp-reason'],['prescriber','supp-prescriber']]) {
     const value = getFieldValue(id).trim();
@@ -344,7 +349,8 @@ export function saveSupplement(index) {
   const servingUnit = normalizeSupplementUnit(getFieldValue('supp-serving-unit'));
   if (isFinite(servingValue) || servingUnit) entry.servingSize = { ...(isFinite(servingValue) ? { value: servingValue } : {}), ...(servingUnit ? { unit: servingUnit } : {}) };
   else delete entry.servingSize;
-  const latestDose = sorted[sorted.length - 1]?.dose;
+  recordIngredientDoseChange(entry, localDateKey(), previous);
+  const latestDose = entry.periods[entry.periods.length - 1]?.dose;
   if (latestDose) entry.currentDose = latestDose; else delete entry.currentDose;
   if (pendingImport?.draft?.source?.reviewed) {
     const draft = pendingImport.draft;
@@ -420,11 +426,13 @@ export function restartSupplement(index) {
   const periods = getSupplementPeriods(previous).map(period => ({ ...period }));
   const latest = periods[periods.length - 1];
   if (latest?.end === today) latest.end = null;
-  else periods.push({ start: today, end: null, ...(previous.currentDose ? { dose: previous.currentDose } : {}) });
-  replaceImportedArrayItem(state.importedData, 'supplements', index, {
+  else periods.push({ start: today, end: null, ...(previous.currentDose ? { dose: previous.currentDose } : {}), ...(previous.schedule ? { schedule: { ...previous.schedule } } : {}) });
+  const entry = {
     ...previous, periods, startDate: periods[0]?.start || today, endDate: null,
     lifecycle: { ...(previous.lifecycle || {}), state: 'active', changedAt: Date.now() }, updatedAt: Date.now(),
-  });
+  };
+  recordIngredientDoseChange(entry, localDateKey(), previous);
+  replaceImportedArrayItem(state.importedData, 'supplements', index, entry);
   saveImportedData();
   showNotification('Item restarted. Review the current dose and schedule.', 'success');
   refreshSupplementSurfaces(index);
@@ -449,7 +457,7 @@ export function beginSupplementDoseChange(index) {
   const doseInputs = document.querySelectorAll('#supp-periods .supp-period-dose');
   const latestDose = doseInputs[doseInputs.length - 1];
   if (latestDose instanceof HTMLElement) latestDose.focus();
-  showNotification('A new period starts today. Enter the new dose and save.', 'info');
+  showNotification('A new period starts today. Update ingredient amounts or enter an explicit dose, then save.', 'info');
 }
 
 export async function deleteSupplement(index) {
@@ -473,6 +481,7 @@ export async function deleteSupplement(index) {
 }
 
 initSupplementActionDelegates({
+  applyIngredientDoseToPeriod,
   openEditor: openSupplementsEditor,
   toggleAccordion: toggleSuppAccordion,
   toggleAddForm: showAddSuppForm,
@@ -501,3 +510,21 @@ initSupplementActionDelegates({
   updateAllIngredientTotals: updateAllIngTotals,
   updateIngredientUnit,
 });
+
+
+/** Commit only the dated ingredient confirmation the user just previewed. */
+export async function saveSupplementIngredientPeriod(id, periodIndex, expectedRecord) {
+  const profile = state.currentProfile;
+  const records = state.importedData.supplements || [];
+  const index = records.findIndex(record => getSupplementRecordId(record) === id);
+  if (!profile || index < 0 || records.filter(record => getSupplementRecordId(record) === id).length !== 1
+      || JSON.stringify(records[index]) !== expectedRecord) return false;
+  const confirmed = confirmIngredientDosePeriod(records[index], periodIndex);
+  if (!confirmed) return false;
+  const baseData = structuredClone(state.importedData);
+  const snapshot = structuredClone(baseData);
+  replaceImportedArrayItem(snapshot, 'supplements', index, confirmed);
+  const saved = await saveImportedDataForProfile(profile, snapshot, { baseData });
+  if (saved && state.currentProfile === profile) showNotification('Dose dates saved', 'success');
+  return saved;
+}

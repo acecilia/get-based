@@ -354,6 +354,12 @@ test('supplements browser coverage handles editor ingredients imports sync and A
       supplements.saveSupplement(-1);
       await waitUntil(() => state.importedData.supplements.length === 2, 'reviewed import saved');
       const importedRecord = state.importedData.supplements[1];
+      const importedHistory = (await import('/js/therapy-correlations.js')).prepareTherapyHistory(importedRecord);
+      outcomes.importedIngredientsAutomaticallyBecomeDatedRegimenDoses =
+        importedRecord.periods.at(-1).ingredientDoses?.length === 3
+        && importedHistory.quantity?.value === 400
+        && importedHistory.quantity?.ingredient === 'Magnesium glycinate'
+        && importedHistory.currentDoses.every(d => d.confirmedSince === importedRecord.periods.at(-1).start);
       outcomes.reviewedImportSavesStructuredAndLegacyMirrorsWithProvenance =
         importedRecord.id.startsWith('sm_')
         && importedRecord.labelDirections === '2 capsules/day'
@@ -399,12 +405,14 @@ test('supplements browser coverage handles editor ingredients imports sync and A
         && state.importedData.supplements[0].unknownFutureField?.preserve === true
         && state.importedData.supplements[0].schemaVersion === 2;
 
+      const historyBeforeDoseChange = clone(state.importedData.supplements[0].periods);
       supplements.beginSupplementDoseChange(0);
       outcomes.doseChangeStagesANewPeriodWithoutOverwritingHistory =
         document.querySelectorAll('#supp-periods .supp-period-row').length === 2
         && document.querySelectorAll('#supp-periods .supp-period-end')[0]?.value !== ''
         && document.querySelectorAll('#supp-periods .supp-period-start')[1]?.value !== ''
-        && state.importedData.supplements[0].periods?.length === 1;
+        && historyBeforeDoseChange.length === 1
+        && JSON.stringify(state.importedData.supplements[0].periods) === JSON.stringify(historyBeforeDoseChange);
       supplements.openSupplementsEditor(0);
 
       supplements.endSupplement(0);
@@ -417,6 +425,8 @@ test('supplements browser coverage handles editor ingredients imports sync and A
         endedState
         && state.importedData.supplements[0].lifecycle?.state === 'active'
         && state.importedData.supplements[0].periods?.length === 1
+        && state.importedData.supplements[0].periods[0].dose === undefined
+        && state.importedData.supplements[0].periods[0].start === '2026-01-01'
         && state.importedData.supplements[0].periods[0].end === null;
 
       const aiFixture = document.createElement('div');

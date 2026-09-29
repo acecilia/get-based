@@ -8,8 +8,10 @@ import { suppActionAttrs } from './supplement-action-delegates.js';
 import { formatSupplementTotal, ingredientDailyTotal } from './supplement-impact.js';
 import {
   SUPPLEMENT_UNIT_OPTIONS,
+  supplementDoseText,
   formatSupplementAmount,
   getIngredientQuantity,
+  getSupplementDailyDoses,
   getSupplementPeriods,
   getSupplementStatus,
   localDateKey,
@@ -144,9 +146,31 @@ export function periodRowHtml(idx, period = {}, showRemove = true, originalIndex
     <input type="date" class="supp-period-start" aria-label="Period start" value="${escapeHTML(period.start || '')}">
     <span class="supp-period-arrow">&rarr;</span>
     <input type="date" class="supp-period-end" aria-label="Period end" value="${escapeHTML(period.end || '')}" placeholder="ongoing">
-    <input type="text" class="supp-period-dose" aria-label="Dose or strength during period" placeholder="Dose / strength" value="${escapeHTML(period.dose || '')}">
+    <input type="text" class="supp-period-dose" aria-label="Dose or strength during period" placeholder="Dose / strength" value="${escapeHTML(supplementDoseText(period.dose))}">
+    <button type="button" class="supp-ingredient-add" ${suppActionAttrs('use-ingredient-dose')}>Use ingredients for these dates</button>
+    ${period.ingredientDoses?.length ? `<small class="supp-period-dose-summary">${period.ingredientDoses.map(d => `${escapeHTML(d.ingredient)}: ${escapeHTML(supplementDoseText(d))}`).join('; ')}</small>` : ''}
     <button class="supp-period-remove" ${suppActionAttrs('remove-period')} title="Remove"${showRemove ? '' : ' style="display:none"'}>&times;</button>
   </div>`;
+}
+
+/** Copy a current amount only after the user chooses the dated period. Saving remains explicit. */
+export function applyIngredientDoseToPeriod(button) {
+  const row = button.closest('.supp-period-row');
+  if (!row) return;
+  const doses = getSupplementDailyDoses({ ingredients: collectIngredients(), timesPerDay: Number(getFieldValue('supp-times')),
+    schedule: { mode: getFieldValue('supp-schedule-mode') || 'daily' } });
+  if (!doses.length) {
+    button.textContent = 'Set ingredient amounts and daily frequency first';
+    return;
+  }
+  const input = row.querySelector('.supp-period-dose');
+  input.value = doses.length === 1 ? supplementDoseText(doses[0]) : '';
+  row.setAttribute('data-ingredient-doses', JSON.stringify(doses));
+  row.querySelector('.supp-period-dose-summary')?.remove();
+  const summary = document.createElement('small');
+  summary.className = 'supp-period-dose-summary';
+  summary.textContent = doses.map(d => `${d.ingredient}: ${supplementDoseText(d)}`).join('; ') + ` — ${row.querySelector('.supp-period-start').value || 'set start date'} → ${row.querySelector('.supp-period-end').value || 'ongoing'}. Click Update to save these dose dates.`;
+  row.append(summary);
 }
 
 export function addPeriodRow(period = {}) {
@@ -180,7 +204,23 @@ export function collectPeriods() {
       ? getSupplementPeriods(state.importedData.supplements?.[supplementIndex])?.[previousIndex] : null;
     if (!start) continue;
     const period = { ...(previous && typeof previous === 'object' ? previous : {}), start, end };
-    if (dose) period.dose = dose;
+    const snapshot = row.getAttribute('data-ingredient-doses');
+    if (snapshot) {
+      const doses = JSON.parse(snapshot);
+      if (dose === (doses.length === 1 ? supplementDoseText(doses[0]) : '')) {
+        period.ingredientDoses = doses;
+        if (doses.length === 1) period.dose = doses[0]; else delete period.dose;
+        period.schedule = previous?.schedule ? { ...previous.schedule } : { mode: 'daily' };
+        periods.push(period);
+        continue;
+      }
+    }
+    if (dose !== supplementDoseText(previous?.dose)) delete period.ingredientDoses;
+    if (dose) {
+      const linked = typeof previous?.dose === 'object' ? previous.dose : null;
+      period.dose = previous?.dose && supplementDoseText(previous.dose) === dose ? previous.dose
+        : linked?.ingredient ? { text: dose, ingredient: linked.ingredient } : dose;
+    }
     else delete period.dose;
     periods.push(period);
   }
@@ -218,6 +258,7 @@ export function collectIngredients(pendingImport = null) {
     }
     const times = timesRaw ? parseFloat(timesRaw) : NaN;
     if (isFinite(times) && times > 0) ingredient.timesPerDay = times;
+    else delete ingredient.timesPerDay;
     ingredients.push(ingredient);
   }
   return ingredients.length ? ingredients : undefined;
@@ -351,7 +392,7 @@ export function suppFormHtml(editIdx, supplement, importReviewHtml = '') {
       <div class="supp-form-field supp-form-field-compact"><label>Uses/day</label><input type="number" id="supp-times" placeholder="1" min="0" max="99" step="0.5" value="${editing && supplement.timesPerDay != null ? escapeHTML(String(supplement.timesPerDay)) : ''}"></div>
       <div class="supp-form-field supp-form-field-compact"><label>PRN max/day</label><input type="number" id="supp-max-per-day" min="0" max="99" step="0.5" value="${schedule.maxPerDay != null ? escapeHTML(String(schedule.maxPerDay)) : ''}"></div>
     </div><div class="supp-form-row"><div class="supp-form-field"><label>Schedule details</label><input type="text" id="supp-schedule-details" placeholder="Mon/Wed/Fri, every 3 days, 5 days on / 2 off…" value="${escapeHTML(schedule.details || '')}"></div></div>
-    <div class="supp-form-row"><div class="supp-form-field supp-form-field-wide"><label>Use periods <span class="supp-label-hint">blank end = currently using</span></label><div class="supp-period-column-labels"><span>Start</span><span>End</span><span>Dose / strength during period</span></div><div id="supp-periods">${periods.map((period, index) => periodRowHtml(index, period, periods.length > 1, index)).join('')}</div><div class="supp-period-actions"><button class="supp-period-add" ${suppActionAttrs('add-period')}>+ Add period</button></div></div></div>
+    <div class="supp-form-row"><div class="supp-form-field supp-form-field-wide"><label>Use periods <span class="supp-label-hint">blank end = currently using</span></label><div class="supp-period-column-labels"><span>Start</span><span>End</span><span>Dose / strength during period</span></div><p class="supp-form-help">Changing ingredient doses or frequency records the change from today. For earlier dates, set the period dates and choose “Use ingredients for these dates” to confirm when those amounts applied. Split periods at past dose changes. An explicit dose overrides ingredient amounts.</p><div id="supp-periods">${periods.map((period, index) => periodRowHtml(index, period, periods.length > 1, index)).join('')}</div><div class="supp-period-actions"><button class="supp-period-add" ${suppActionAttrs('add-period')}>+ Add period</button></div></div></div>
     <div class="supp-form-section-title">Active ingredients <span class="supp-label-hint">amount per serving</span></div><div class="supp-form-row"><div class="supp-form-field"><label>Ingredients</label><div id="supp-ingredients">${ingredients.map((ingredient, index) => ingredientRowHtml(index, ingredient.name, ingredient.amount, ingredient.timesPerDay, editing && supplement.timesPerDay ? supplement.timesPerDay : '', ingredient)).join('')}</div><div class="supp-ingredient-actions"><button class="supp-ingredient-add" ${suppActionAttrs('add-ingredient')}>+ Add</button></div></div></div>
     <div class="supp-form-section-title">Other label ingredients <span class="supp-label-hint">excipients, fillers, capsule material — one per line</span></div><div class="supp-form-row"><div class="supp-form-field supp-form-field-wide"><textarea id="supp-inactive-ingredients" rows="2" placeholder="Microcrystalline cellulose&#10;Vegetable capsule">${escapeHTML(inactiveIngredients.join('\n'))}</textarea></div></div>
     <div class="supp-form-section-title">Laboratory & quality results <span class="supp-label-hint">COA, potency, heavy metals, microbiology — not active ingredients</span></div><div class="supp-form-row"><div class="supp-form-field supp-form-field-wide">
