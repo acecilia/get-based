@@ -15,7 +15,8 @@ function expectAll(outcomes) {
   expect(failed).toEqual([]);
 }
 
-test('supplements browser coverage handles editor ingredients imports sync and AI handoff', async ({ page }) => {
+async function exerciseSupplementEditor(page, stylesFail = false) {
+  if (stylesFail) await page.route('**/css/context-editor.css*', route => route.abort());
   await page.addInitScript(seedCompletedTour);
   await page.goto('/app', { waitUntil: 'load' });
   await page.evaluate(() => {
@@ -26,7 +27,7 @@ test('supplements browser coverage handles editor ingredients imports sync and A
     document.getElementById('sync-setup-overlay')?.remove();
   });
 
-  const outcomes = await page.evaluate(async () => {
+  const outcomes = await page.evaluate(async stylesFail => {
     const [{ state }, data, supplements, supplementsRuntime] = await Promise.all([
       import('/js/state.js'),
       import('/js/data.js'),
@@ -223,6 +224,7 @@ test('supplements browser coverage handles editor ingredients imports sync and A
           return !body.includes('calm sleep') && !body.includes('200 mg');
         });
 
+      await data.saveImportedData();
       supplements.openSupplementsEditor();
       await waitUntil(() => document.getElementById('modal-overlay')?.classList.contains('show'), 'supplement editor open');
       document.querySelector('[data-supp-action="close-modal"]')?.click();
@@ -275,8 +277,14 @@ test('supplements browser coverage handles editor ingredients imports sync and A
         && addRowFocusedLastName;
 
       document.getElementById('supp-url').value = ' https://example.test/products/magnesium ';
+      outcomes.importReviewStylesAreLazy = !document.querySelector('link[data-context-editor-stylesheet]');
       await supplements.fetchSupplementFromURL();
       await waitUntil(() => !!document.querySelector('.supp-import-review'), 'URL import review staged');
+      outcomes.importReviewStylesLoaded = stylesFail
+        ? !document.querySelector('link[data-context-editor-stylesheet]')
+        : !!document.querySelector('link[data-context-editor-stylesheet]')?.sheet
+        && getComputedStyle(document.querySelector('.supp-import-review')).borderTopStyle === 'solid'
+        && getComputedStyle(document.querySelector('.supp-import-review-header')).display === 'flex';
       const formUntouchedBeforeReview = (document.getElementById('supp-name')?.value || '') === '';
       document.querySelector('[data-supp-action="apply-import"]')?.click();
       await waitUntil(() => (document.getElementById('supp-name')?.value || '') === 'Magnesium Complex', 'URL import fields populated');
@@ -351,7 +359,7 @@ test('supplements browser coverage handles editor ingredients imports sync and A
       };
       photoInput.remove();
 
-      supplements.saveSupplement(-1);
+      await supplements.saveSupplement(-1);
       await waitUntil(() => state.importedData.supplements.length === 2, 'reviewed import saved');
       const importedRecord = state.importedData.supplements[1];
       const importedHistory = (await import('/js/therapy-correlations.js')).prepareTherapyHistory(importedRecord);
@@ -398,21 +406,21 @@ test('supplements browser coverage handles editor ingredients imports sync and A
         && document.getElementById('detail-modal')?.dataset.syncRefreshItemId?.startsWith('s_') === true
         && document.querySelector('.supp-list-expanded')?.dataset.expandedIdx === '0';
 
-      supplements.saveSupplement(0);
+      await supplements.saveSupplement(0);
       await waitUntil(() => !!state.importedData.supplements[0].id, 'legacy supplement upgraded on save');
       outcomes.legacyEditUsesStableOldSyncIdentityAndPreservesUnknownFields =
         state.importedData.supplements[0].id.startsWith('s_')
         && state.importedData.supplements[0].unknownFutureField?.preserve === true
         && state.importedData.supplements[0].schemaVersion === 2;
 
-      const historyBeforeDoseChange = clone(state.importedData.supplements[0].periods);
+      const historyBeforeDoseChange = clone(supplements.getSupplementPeriods(state.importedData.supplements[0]));
       supplements.beginSupplementDoseChange(0);
       outcomes.doseChangeStagesANewPeriodWithoutOverwritingHistory =
         document.querySelectorAll('#supp-periods .supp-period-row').length === 2
         && document.querySelectorAll('#supp-periods .supp-period-end')[0]?.value !== ''
         && document.querySelectorAll('#supp-periods .supp-period-start')[1]?.value !== ''
         && historyBeforeDoseChange.length === 1
-        && JSON.stringify(state.importedData.supplements[0].periods) === JSON.stringify(historyBeforeDoseChange);
+        && JSON.stringify(supplements.getSupplementPeriods(state.importedData.supplements[0])) === JSON.stringify(historyBeforeDoseChange);
       supplements.openSupplementsEditor(0);
 
       supplements.endSupplement(0);
@@ -477,9 +485,17 @@ test('supplements browser coverage handles editor ingredients imports sync and A
     }
 
     return outcomes;
-  });
+  }, stylesFail);
 
   expectAll(outcomes);
+}
+
+test('supplements browser coverage handles editor ingredients imports sync and AI handoff', async ({ page }) => {
+  await exerciseSupplementEditor(page);
+});
+
+test('supplement URL and photo imports survive a failed review stylesheet download', async ({ page }) => {
+  await exerciseSupplementEditor(page, true);
 });
 
 test('review link reads a BrainMarket composition table without AI JSON truncation', async ({ page }) => {
@@ -588,6 +604,7 @@ test('review link reads a BrainMarket composition table without AI JSON truncati
       }], healthGoals: [], diagnoses: null,
       customMarkers: {}, markerNotes: {}, markerValueNotes: {}, changeHistory: [],
     };
+    await data.saveImportedData();
     data.invalidateActiveDataCache();
     try {
       supplements.openSupplementsEditor(0);
@@ -645,7 +662,7 @@ test('review link reads a BrainMarket composition table without AI JSON truncati
       if (reclassifiedAnalyte instanceof HTMLInputElement) reclassifiedAnalyte.value = 'Corrected copper';
       if (reclassifiedCategory instanceof HTMLSelectElement) reclassifiedCategory.value = 'identity';
       document.getElementById('supp-times').value = '1';
-      supplements.saveSupplement(0);
+      await supplements.saveSupplement(0);
       const saved = state.importedData.supplements[0];
       return {
         aiCalls,
@@ -759,6 +776,7 @@ test('supplements mobile editor groups history and keeps structured controls ins
     const dashboard = supplements.renderSupplementsSection();
     supplements.openSupplementsEditor(0);
     const modal = document.getElementById('detail-modal');
+    modal.querySelectorAll('details').forEach(details => { details.open = true; });
     const ingredientRow = modal?.querySelector('.supp-ingredient-row');
     const modalRect = modal?.getBoundingClientRect();
     const controls = modal ? Array.from(modal.querySelectorAll('.supp-ingredient-row input, .supp-ingredient-row select, .supp-ingredient-row button, .supp-quality-row input, .supp-quality-row select, .supp-quality-row button')) : [];
