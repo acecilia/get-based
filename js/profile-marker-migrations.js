@@ -9,6 +9,7 @@ import {
 import { SPECIALTY_MARKER_DEFS } from './adapters.js';
 import { renameLabEntryMarker } from './lab-entry.js';
 import {
+  preserveExactStandardCustomRanges,
   repairCanonicalMarkerAliases,
   repairNamedStandardMarkerAliases,
 } from './profile-marker-alias-migrations.js';
@@ -759,7 +760,13 @@ function _repairSpadiaFattyAcidKeys(data) {
   }
 }
 
-/** Drop stale customs whose key+unit match a built-in; carry a differing range into refOverrides. */
+/**
+ * Drop custom definitions whose key and unit already match a built-in.
+ * Differing units remain custom unless snapshot-backed repair proves conversion.
+ *
+ * @param {ProfileData} data
+ * @returns {void}
+ */
 function _adoptExactStandardCustomMarkers(data) {
   if (!data.customMarkers || typeof data.customMarkers !== 'object') return;
   for (const [key, definition] of Object.entries(data.customMarkers)) {
@@ -767,11 +774,6 @@ function _adoptExactStandardCustomMarkers(data) {
     const standard = MARKER_SCHEMA[catKey]?.markers?.[markerKey];
     if (!standard) continue;
     if (normalizeClinicalUnit(definition?.unit) !== normalizeClinicalUnit(standard.unit)) continue;
-    const refMin = definition?.refMin != null && Number.isFinite(Number(definition.refMin)) ? Number(definition.refMin) : null;
-    const refMax = definition?.refMax != null && Number.isFinite(Number(definition.refMax)) ? Number(definition.refMax) : null;
-    if (!data.refOverrides?.[key] && ((refMin != null && refMin !== standard.refMin) || (refMax != null && refMax !== standard.refMax))) {
-      data.refOverrides = { ...(data.refOverrides || {}), [key]: { ...(refMin != null ? { refMin } : {}), ...(refMax != null ? { refMax } : {}) } };
-    }
     delete data.customMarkers[key];
   }
 }
@@ -786,6 +788,7 @@ export function repairProfileMarkerData(data) {
   _repairCalculatedRatioAliases(data);
   _repairUnitSuffixedStandardMarkers(data);
   _repairSnapshotBackedReferenceUnits(data);
+  preserveExactStandardCustomRanges(data);
   _repairNewlyStandardizedImports(data);
   _adoptExactStandardCustomMarkers(data);
   _repairFractionStoredPercentImports(data);

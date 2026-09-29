@@ -4,8 +4,8 @@
   "scenario": "Fresh mobile returning-user load with browser cache and service workers disabled",
   "maximums": {
     "requests": 337,
-    "transferBytes": 1230000,
-    "decodedBytes": 3452500
+    "transferBytes": 1231000,
+    "decodedBytes": 3454000
   },
   "reference": {
     "requests": 276,
@@ -44,7 +44,10 @@
     "persistenceHardeningMeasuredCommit": "849c0412",
     "immatureGranulocytesPctRequests": 337,
     "immatureGranulocytesPctTransferBytes": 1228832,
-    "immatureGranulocytesPctDecodedBytes": 3451503
+    "immatureGranulocytesPctDecodedBytes": 3451503,
+    "immatureGranulocytesPctSafetyRequests": 337,
+    "immatureGranulocytesPctSafetyTransferBytes": 1230179,
+    "immatureGranulocytesPctSafetyDecodedBytes": 3452046
   },
   "referenceCommit": "7747f1d7",
   "measuredAt": "2026-09-17"
